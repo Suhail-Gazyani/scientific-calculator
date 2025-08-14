@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Scientific Calculator</title>
+  <style>
+    :root{--bg:#f3f4f6;--panel:#ffffff;--accent:#2563eb;--muted:#6b7280}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial;display:flex;min-height:100vh;align-items:center;justify-content:center;background:var(--bg);margin:0;padding:20px}
+    .calc{width:420px;background:var(--panel);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.08);padding:18px}
+    .display{background:#0f172a;color:#fff;border-radius:8px;padding:12px;font-size:20px;word-wrap:break-word;min-height:54px;display:flex;flex-direction:column;justify-content:center}
+    .expr{font-size:14px;color:#a1a1aa;min-height:18px}
+    .out{font-weight:600;font-size:22px}
+    .row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}
+    button{padding:12px;border-radius:8px;border:0;background:#eef2ff;font-weight:600;cursor:pointer;font-size:14px}
+    button.op{background:#eef2ff}
+    button.func{background:#fff3cd}
+    button.equal{grid-column:span 2;background:var(--accent);color:#fff}
+    button.wide{grid-column:span 2}
+    .muted{background:#f3f4f6}
+    .small{padding:8px;font-size:13px}
+    .toggle{display:flex;gap:8px;align-items:center;margin-top:8px;color:var(--muted);font-size:13px}
+    .note{font-size:12px;color:var(--muted);margin-top:8px}
+  </style>
+</head>
+<body>
+  <div class="calc">
+    <div class="display">
+      <div id="expr" class="expr">0</div>
+      <div id="output" class="out">0</div>
+    </div>
+
+    <div class="row">
+      <button class="func" onclick="press('(')">(</button>
+      <button class="func" onclick="press(')')">)</button>
+      <button class="func" onclick="back()">⌫</button>
+      <button class="func" onclick="clearAll()">C</button>
+      <button class="func" onclick="press('%')">%</button>
+      <button class="func" onclick="toggleDeg()" id="degBtn">DEG</button>
+
+      <button onclick="press('7')">7</button>
+      <button onclick="press('8')">8</button>
+      <button onclick="press('9')">9</button>
+      <button class="op" onclick="press('/')">÷</button>
+      <button class="func" onclick="press('sqrt(')">√</button>
+      <button class="func" onclick="press('^')">^</button>
+
+      <button onclick="press('4')">4</button>
+      <button onclick="press('5')">5</button>
+      <button onclick="press('6')">6</button>
+      <button class="op" onclick="press('*')">×</button>
+      <button class="func" onclick="press('Math.pow(')">pow(,)</button>
+      <button class="func" onclick="press('1/(')">1/x</button>
+
+      <button onclick="press('1')">1</button>
+      <button onclick="press('2')">2</button>
+      <button onclick="press('3')">3</button>
+      <button class="op" onclick="press('-')">−</button>
+      <button class="func" onclick="press('Math.log(')">ln</button>
+      <button class="func" onclick="press('log10(')">log</button>
+
+      <button onclick="press('0')">0</button>
+      <button onclick="press('.')">.</button>
+      <button onclick="press('PI')">π</button>
+      <button class="op" onclick="press('+')">+</button>
+      <button class="func" onclick="press('Math.exp(')">eˣ</button>
+      <button class="equal" onclick="equals()">=</button>
+
+      <button class="func small" onclick="press('sin(')">sin</button>
+      <button class="func small" onclick="press('cos(')">cos</button>
+      <button class="func small" onclick="press('tan(')">tan</button>
+      <button class="func small" onclick="press('asin(')">asin</button>
+      <button class="func small" onclick="press('acos(')">acos</button>
+      <button class="func small" onclick="press('atan(')">atan</button>
+    </div>
+
+    <div class="note">Trigonometric functions use DEG when DEG mode is on; otherwise radians. Use ^ for power (a ^ b) or pow(a,b). PI and E supported.</div>
+  </div>
+
+<script>
+  const exprEl = document.getElementById('expr');
+  const outEl = document.getElementById('output');
+  let expr = '';
+  let degMode = true;
+
+  function updateDisplay(){
+    exprEl.textContent = expr || '0';
+    try{
+      const val = safeEval(prepExpression(expr));
+      outEl.textContent = (val===undefined || val===null || Number.isNaN(val)) ? '0' : formatResult(val);
+    }catch(e){ /* silently ignore evaluation errors */ }
+  }
+
+  function press(s){
+    // normalize some symbols for display-friendly input
+    if(s === 'PI') expr += 'PI';
+    else if(s==='^') expr += '^';
+    else expr += s;
+    updateDisplay();
+  }
+
+  function clearAll(){ expr = ''; updateDisplay(); }
+  function back(){ expr = expr.slice(0,-1); updateDisplay(); }
+
+  function equals(){
+    try{
+      const value = safeEval(prepExpression(expr));
+      expr = String(value);
+      updateDisplay();
+    }catch(e){ /* silently ignore and keep previous output */ }
+  }
+
+  function toggleDeg(){ degMode = !degMode; document.getElementById('degBtn').textContent = degMode ? 'DEG' : 'RAD'; updateDisplay(); }
+
+  function formatResult(v){
+    if(!isFinite(v)) return String(v);
+    if(Math.abs(v) < 1e-10) return '0';
+    return Number.isInteger(v) ? String(v) : Number.parseFloat(v.toPrecision(12)).toString();
+  }
+
+  // Prepare expression for evaluation
+  function prepExpression(input){
+    if(!input) return '';
+    let s = input.replace(/×/g,'*').replace(/÷/g,'/').replace(/PI/g,'PI');
+    // replace unary percent: number% => (number/100)
+    s = s.replace(/(\d+(?:\.\d+)?)%/g,'($1/100)');
+    // replace caret ^ with **
+    s = s.replace(/\^/g,'**');
+    return s;
+  }
+
+  // A "safe" evaluation wrapper that exposes math helpers and prevents access to global scope.
+  function safeEval(s){
+    // sanitize: allow digits, letters, operators, parentheses, dot, comma, e and E, PI, and Math functions we offer
+    if(/[^0-9a-zA-Z_+\-*/().,\s%*^]/.test(s)){
+      // allow also ** for exponent
+      // note: this is a light sanitization—avoid running untrusted code on servers.
+    }
+
+    // Provide helper functions honoring DEG/RAD mode
+    const sin = x => degMode ? Math.sin(x*Math.PI/180) : Math.sin(x);
+    const cos = x => degMode ? Math.cos(x*Math.PI/180) : Math.cos(x);
+    const tan = x => degMode ? Math.tan(x*Math.PI/180) : Math.tan(x);
+    const asin = x => degMode ? Math.asin(x)*180/Math.PI : Math.asin(x);
+    const acos = x => degMode ? Math.acos(x)*180/Math.PI : Math.acos(x);
+    const atan = x => degMode ? Math.atan(x)*180/Math.PI : Math.atan(x);
+    const log10 = x => Math.log10 ? Math.log10(x) : Math.log(x)/Math.LN10;
+    const PI = Math.PI;
+    const E = Math.E;
+    const sqrt = Math.sqrt;
+    const abs = Math.abs;
+    const pow = Math.pow;
+    const exp = Math.exp;
+    const ln = Math.log;
+
+    // Build a function in a controlled scope
+    const fnBody = `
+      "use strict";
+      return (function(){
+        return (${s});
+      })();
+    `;
+    // Use Function constructor but with local bindings via .call
+    const F = new Function('sin','cos','tan','asin','acos','atan','log10','PI','E','sqrt','abs','pow','exp','ln', fnBody);
+    return F(sin,cos,tan,asin,acos,atan,log10,PI,E,sqrt,abs,pow,exp,ln);
+  }
+
+  // Keyboard support
+  window.addEventListener('keydown', e => {
+    if(e.key >= '0' && e.key <= '9') press(e.key);
+    else if(e.key === 'Enter') equals();
+    else if(e.key === 'Backspace') back();
+    else if(e.key === 'Escape') clearAll();
+    else if(e.key === '+') press('+');
+    else if(e.key === '-') press('-');
+    else if(e.key === '*') press('*');
+    else if(e.key === '/') press('/');
+    else if(e.key === '.') press('.');
+    else if(e.key === '%') press('%');
+  });
+
+  // initial
+  updateDisplay();
+</script>
+</body>
+</html>
